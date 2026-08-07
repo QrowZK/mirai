@@ -112,7 +112,6 @@ impl ApplicationHandler<WakerEvent> for App {
 
         match event {
             WindowEvent::CloseRequested => {
-                state.servo.start_shutting_down();
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
