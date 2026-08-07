@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Manual fallback: dispatching with a version builds the installer and
+  # creates the vX.X.X tag + release from the workflow itself.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (without the leading v, e.g. 0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -46,7 +54,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
+          $version = "${{ inputs.version || github.ref_name }}".TrimStart("v")
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Ensure Inno Setup is installed
@@ -70,5 +78,6 @@ jobs:
       - name: Attach installer to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
           files: installer/Output/MiraiSetup-*.exe
           generate_release_notes: true
