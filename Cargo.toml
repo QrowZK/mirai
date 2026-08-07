@@ -29,3 +29,8 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# MSE development: build against the locally patched Servo tree. Before
+# merging, this switches to the QrowZK/servo fork of the same branch.
+[patch."https://github.com/servo/servo.git"]
+servo = { path = "/workspace/servo/servo/components/servo" }
