@@ -60,8 +60,16 @@ jobs:
       # at the LLVM installed on the runner image.
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
       RUSTUP_WINDOWS_PATH_ADD_BIN: 1
+      # Servo's repo contains WPT paths longer than MAX_PATH; the git CLI
+      # honors core.longpaths where cargo's built-in git does not.
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - uses: actions/checkout@v4
+      - name: Enable Windows long paths
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+          git config --global core.longpaths true
       - name: Install MozTools (required to build SpiderMonkey)
         shell: pwsh
         run: |
