@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  # Fast feedback: the privacy engine has no Servo dependency and builds in minutes.
+  privacy-tests:
+    name: Privacy engine tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: privacy
+      - run: cargo test -p mirai-privacy
+      - run: cargo fmt --check
+      - run: cargo clippy -p mirai-privacy -- -D warnings
+
+  build-linux:
+    name: Browser build (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Servo build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ccache clang cmake curl g++ git gperf m4 \
+            libdbus-1-dev libfreetype6-dev libgl1-mesa-dri libgles2-mesa-dev \
+            libglib2.0-dev libharfbuzz-dev liblzma-dev libunwind-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxmu-dev libxmu6 libegl1-mesa-dev llvm-dev libssl-dev \
+            pkg-config python3 python3-pip libx11-dev libxkbcommon-dev xorg-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux
+          cache-all-crates: true
+      - run: cargo build -p mirai
+
+  build-windows:
+    name: Browser build (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      # clang_sys searches PATH before Program Files\LLVM, so point it directly
+      # at the LLVM installed on the runner image.
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      RUSTUP_WINDOWS_PATH_ADD_BIN: 1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MozTools (required to build SpiderMonkey)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/servo/servo-build-deps/releases/download/msvc-deps/moztools-4.0.zip" -OutFile moztools.zip
+          Expand-Archive moztools.zip -DestinationPath C:\moztools-build
+          "MOZTOOLS_PATH=C:\moztools-build\moztools-4.0" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows
+          cache-all-crates: true
+      - run: cargo build -p mirai
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirai-windows
+          path: target/debug/mirai.exe
+          if-no-files-found: warn

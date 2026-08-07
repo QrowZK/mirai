@@ -1,0 +1,11 @@
+[package]
+name = "mirai-privacy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Privacy engine for the Mirai browser: ad/tracker blocking via filter lists"
+
+[dependencies]
+adblock = { workspace = true }
+log = { workspace = true }

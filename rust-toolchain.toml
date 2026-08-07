@@ -1,0 +1,4 @@
+[toolchain]
+# Matches the toolchain pinned by our Servo revision (servo/servo rust-toolchain.toml).
+channel = "1.95.0"
+components = ["clippy", "rustfmt"]

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = ["crates/mirai", "crates/mirai-privacy"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+repository = "https://github.com/QrowZK/mirai"
+
+[workspace.dependencies]
+# Servo is pinned to a known-good commit; bump deliberately and let CI validate.
+libservo = { package = "servo", git = "https://github.com/servo/servo.git", rev = "7d089afbc1ec575bc4c3d0e1e760222d58cbcb96" }
+# Kept in sync with Servo's workspace pins so window-handle and unit types line up.
+winit = "0.30.13"
+euclid = "0.22"
+url = "2.5"
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "logging", "std", "tls12"] }
+log = "0.4"
+env_logger = "0.11"
+adblock = "0.13"
+
+# Servo is enormous; give debug builds enough optimization to be usable.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
