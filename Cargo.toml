@@ -30,7 +30,8 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 2
 
-# MSE development: build against the locally patched Servo tree. Before
-# merging, this switches to the QrowZK/servo fork of the same branch.
+# Mirai's MSE implementation lives in a patched Servo tree, published as the
+# `servo-mse` branch of this repository (snapshot of servo/servo@7d089afb plus
+# the MSE commits; local development can point this at a checkout instead).
 [patch."https://github.com/servo/servo.git"]
-servo = { path = "/workspace/servo/servo/components/servo" }
+servo = { git = "https://github.com/QrowZK/mirai.git", branch = "servo-mse" }
