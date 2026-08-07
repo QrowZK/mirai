@@ -58,6 +58,7 @@ impl Gui {
         context.egui_ctx.options_mut(|options| {
             options.fallback_theme = egui::Theme::Light;
         });
+        context.egui_ctx.set_visuals(mirai_visuals());
 
         Self {
             rendering_context,
@@ -343,4 +344,70 @@ fn truncate_with_ellipsis(input: &str, max_length: usize) -> String {
     } else {
         input.to_string()
     }
+}
+
+/// mirai design system: warm graphite neutrals, muted teal accent, jade for
+/// privacy. Values from the design team's tokens (`tokens/colors.css`,
+/// `tokens/radius.css`), light theme.
+const PRIVACY_JADE: egui::Color32 = egui::Color32::from_rgb(0x2F, 0x7D, 0x5B);
+
+fn mirai_visuals() -> egui::Visuals {
+    use egui::{Color32, CornerRadius, Stroke};
+
+    let surface_window = Color32::from_rgb(0xF1, 0xEE, 0xE8);
+    let surface_sunken = Color32::from_rgb(0xE4, 0xE0, 0xD9);
+    let surface_hover = Color32::from_rgb(0xE8, 0xE4, 0xDC);
+    let surface_active = Color32::from_rgb(0xDB, 0xD6, 0xCC);
+    let surface_field = Color32::from_rgb(0xFF, 0xFF, 0xFF);
+    let text_strong = Color32::from_rgb(0x1C, 0x1B, 0x19);
+    let text_body = Color32::from_rgb(0x2E, 0x2C, 0x29);
+    let text_muted = Color32::from_rgb(0x62, 0x5E, 0x58);
+    let border_hairline = Color32::from_rgb(0xE4, 0xE0, 0xD9);
+    let border_default = Color32::from_rgb(0xCF, 0xCA, 0xC1);
+    let border_focus = Color32::from_rgb(0x12, 0x93, 0x9A);
+    let selection_bg = Color32::from_rgb(0xC2, 0xE4, 0xE6);
+    let link = Color32::from_rgb(0x0E, 0x7A, 0x80);
+
+    let radius = CornerRadius::same(5);
+    let mut visuals = egui::Visuals::light();
+    visuals.override_text_color = Some(text_body);
+    visuals.window_fill = surface_window;
+    visuals.panel_fill = surface_window;
+    visuals.faint_bg_color = surface_sunken;
+    visuals.extreme_bg_color = surface_field;
+    visuals.hyperlink_color = link;
+    visuals.selection.bg_fill = selection_bg;
+    visuals.selection.stroke = Stroke::new(1.0, text_strong);
+    visuals.window_stroke = Stroke::new(1.0, border_default);
+
+    let widgets = &mut visuals.widgets;
+    for widget in [
+        &mut widgets.noninteractive,
+        &mut widgets.inactive,
+        &mut widgets.hovered,
+        &mut widgets.active,
+        &mut widgets.open,
+    ] {
+        widget.corner_radius = radius;
+        widget.fg_stroke = Stroke::new(1.0, text_body);
+    }
+    widgets.noninteractive.bg_fill = surface_window;
+    widgets.noninteractive.weak_bg_fill = surface_window;
+    widgets.noninteractive.bg_stroke = Stroke::new(1.0, border_hairline);
+    widgets.noninteractive.fg_stroke = Stroke::new(1.0, text_muted);
+    widgets.inactive.bg_fill = surface_sunken;
+    widgets.inactive.weak_bg_fill = Color32::from_rgb(0xE7, 0xE3, 0xDB);
+    widgets.inactive.bg_stroke = Stroke::NONE;
+    widgets.hovered.bg_fill = surface_hover;
+    widgets.hovered.weak_bg_fill = surface_hover;
+    widgets.hovered.bg_stroke = Stroke::new(1.0, border_default);
+    widgets.active.bg_fill = surface_active;
+    widgets.active.weak_bg_fill = surface_active;
+    widgets.active.bg_stroke = Stroke::new(1.0, border_focus);
+    widgets.active.fg_stroke = Stroke::new(1.0, text_strong);
+    widgets.open.bg_fill = surface_hover;
+    widgets.open.weak_bg_fill = surface_hover;
+    widgets.open.bg_stroke = Stroke::new(1.0, border_default);
+
+    visuals
 }
