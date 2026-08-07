@@ -43,7 +43,17 @@ cargo test -p mirai-privacy
 Windows is the primary release target; binaries are produced by the
 `build-windows` CI job.
 
+## Media playback
+
+Video/audio support is feature-gated behind `--features media` and uses
+GStreamer. Build with the GStreamer development libraries installed
+(`libgstreamer1.0-dev` + base/good/bad plugin dev packages on Debian/Ubuntu,
+the official GStreamer MSVC runtime + development installers on Windows).
+
 ## Status
 
-Early days: single window, page loading, mouse input, ad/tracker blocking.
-Tabs, URL bar, and richer chrome are next (see plan milestones M1–M3).
+Working: toolbar, URL bar with search fallback, tabs, keyboard shortcuts,
+ad/tracker blocking with per-tab counters and a settings toggle, compiled
+filter-list cache for fast startup, Windows installer pipeline
+(tag `vX.X.X` or dispatch the Release workflow). Media playback is
+best-effort while Servo's GStreamer backend matures.

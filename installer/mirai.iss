@@ -13,6 +13,7 @@ AppPublisher=Mirai
 DefaultDirName={autopf}\Mirai
 DefaultGroupName=Mirai
 UninstallDisplayIcon={app}\mirai.exe
+SetupIconFile=..\assets\mirai.ico
 OutputBaseFilename=MiraiSetup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes

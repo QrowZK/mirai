@@ -29,6 +29,7 @@ pub struct Gui {
     /// Whether the location field has been edited by the user and should not
     /// be overwritten by webview URL updates.
     location_dirty: bool,
+    settings_open: bool,
 }
 
 impl Drop for Gui {
@@ -64,6 +65,7 @@ impl Gui {
             toolbar_height: Default::default(),
             location: initial_url.to_string(),
             location_dirty: false,
+            settings_open: false,
         }
     }
 
@@ -103,6 +105,7 @@ impl Gui {
             toolbar_height,
             location,
             location_dirty,
+            settings_open,
         } = self;
 
         context.run(window, |ctx| {
@@ -164,10 +167,27 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::right_to_left(egui::Align::Center),
                             |ui| {
-                                let blocked = state.blocked_count.load(Ordering::Relaxed);
-                                if blocked > 0 {
-                                    ui.label(format!("🛡 {blocked}"))
-                                        .on_hover_text("Ads and trackers blocked this session");
+                                if ui.add(toolbar_button("☰")).clicked() {
+                                    *settings_open = !*settings_open;
+                                }
+
+                                let blocked_in_tab = state
+                                    .active_webview()
+                                    .and_then(|webview| {
+                                        state
+                                            .blocked_counts_per_tab
+                                            .borrow()
+                                            .get(&webview.id())
+                                            .copied()
+                                    })
+                                    .unwrap_or(0);
+                                let blocked_total = state.blocked_count.load(Ordering::Relaxed);
+                                if blocked_total > 0 {
+                                    ui.label(format!("🛡 {blocked_in_tab}"))
+                                        .on_hover_text(format!(
+                                            "{blocked_in_tab} ads/trackers blocked in this tab \
+                                             ({blocked_total} this session)"
+                                        ));
                                 }
 
                                 let location_id = egui::Id::new("location_input");
@@ -233,6 +253,32 @@ impl Gui {
                     })
             });
             *toolbar_height = Length::new(outer.response.rect.max.y);
+
+            if *settings_open {
+                egui::Window::new("Settings")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
+                    .open(settings_open)
+                    .show(ctx, |ui| {
+                        let mut blocking = state
+                            .blocking_enabled
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        if ui.checkbox(&mut blocking, "Block ads & trackers").changed() {
+                            state
+                                .blocking_enabled
+                                .store(blocking, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        ui.label(
+                            egui::RichText::new(
+                                "EasyList + EasyPrivacy, evaluated locally. \
+                                 Blocked requests never leave this machine.",
+                            )
+                            .small()
+                            .weak(),
+                        );
+                    });
+            }
 
             // Size the active webview to the space left below the chrome.
             let scale =

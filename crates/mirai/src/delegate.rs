@@ -27,7 +27,10 @@ impl WebViewDelegate for AppState {
         self.window.request_redraw();
     }
 
-    fn load_web_resource(&self, _webview: WebView, load: WebResourceLoad) {
+    fn load_web_resource(&self, webview: WebView, load: WebResourceLoad) {
+        if !self.blocking_enabled.load(Ordering::Relaxed) {
+            return;
+        }
         let request = load.request();
         let request_url = request.url.clone();
         let source_url = request
@@ -41,7 +44,13 @@ impl WebViewDelegate for AppState {
             .should_block(request_url.as_str(), source_url.as_deref(), kind)
         {
             let count = self.blocked_count.fetch_add(1, Ordering::Relaxed) + 1;
+            *self
+                .blocked_counts_per_tab
+                .borrow_mut()
+                .entry(webview.id())
+                .or_insert(0) += 1;
             log::info!("blocked ({count}): {request_url}");
+            self.window.request_redraw();
             // Answer the request locally with an immediately-cancelled empty
             // response so the request never reaches the network.
             load.intercept(WebResourceResponse::new(request_url))

@@ -59,6 +59,34 @@ impl Blocker {
         Self::from_filter_lists(crate::default_filter_lists())
     }
 
+    /// Like [`Blocker::with_default_lists`], but caches the compiled engine in
+    /// `cache_dir` so subsequent startups skip filter-list parsing. The cache
+    /// is keyed by the content of the bundled lists, so updating them
+    /// invalidates it automatically.
+    pub fn with_default_lists_cached(cache_dir: &std::path::Path) -> Self {
+        let hash = crate::default_filter_lists().fold(0xcbf29ce484222325u64, |hash, list| {
+            fnv1a(hash, list.as_bytes())
+        });
+        let cache_file = cache_dir.join(format!("blocker-{hash:016x}.bin"));
+
+        if let Ok(serialized) = std::fs::read(&cache_file) {
+            let mut engine = Engine::default();
+            if engine.deserialize(&serialized).is_ok() {
+                return Blocker { engine };
+            }
+            log::warn!("stale or corrupt blocker cache, rebuilding");
+        }
+
+        let blocker = Self::with_default_lists();
+        if std::fs::create_dir_all(cache_dir)
+            .and_then(|_| std::fs::write(&cache_file, blocker.engine.serialize()))
+            .is_err()
+        {
+            log::warn!("could not write blocker cache to {}", cache_file.display());
+        }
+        blocker
+    }
+
     /// Decide whether a request should be blocked.
     ///
     /// `source_url` is the URL of the page issuing the request (used for
@@ -78,6 +106,14 @@ impl Blocker {
             }
         }
     }
+}
+
+fn fnv1a(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 #[cfg(test)]
@@ -138,6 +174,23 @@ mod tests {
             None,
             RequestKind::Document
         ));
+    }
+
+    #[test]
+    fn cache_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("mirai-blocker-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // First call builds and writes the cache; second call loads it.
+        let first = Blocker::with_default_lists_cached(&dir);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        let second = Blocker::with_default_lists_cached(&dir);
+
+        let url = "https://www.google-analytics.com/analytics.js";
+        for blocker in [&first, &second] {
+            assert!(blocker.should_block(url, Some("https://example.com/"), RequestKind::Script));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
