@@ -2,6 +2,7 @@
 
 mod app;
 mod delegate;
+mod ui;
 
 use std::error::Error;
 

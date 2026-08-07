@@ -11,13 +11,20 @@ impl WebViewDelegate for AppState {
         self.window.request_redraw();
     }
 
-    fn notify_page_title_changed(&self, _webview: WebView, title: Option<String>) {
-        let blocked = self.blocked_count.load(Ordering::Relaxed);
-        let title = title.unwrap_or_default();
-        self.window.set_title(&match blocked {
-            0 => format!("{title} — Mirai"),
-            n => format!("{title} — Mirai ({n} blocked)"),
-        });
+    fn notify_page_title_changed(&self, webview: WebView, title: Option<String>) {
+        if Some(webview.id()) == self.active_webview().map(|webview| webview.id()) {
+            let title = title.unwrap_or_default();
+            self.window.set_title(&format!("{title} — Mirai"));
+        }
+        self.window.request_redraw();
+    }
+
+    fn notify_url_changed(&self, _webview: WebView, _url: url::Url) {
+        self.window.request_redraw();
+    }
+
+    fn notify_load_status_changed(&self, _webview: WebView, _status: libservo::LoadStatus) {
+        self.window.request_redraw();
     }
 
     fn load_web_resource(&self, _webview: WebView, load: WebResourceLoad) {

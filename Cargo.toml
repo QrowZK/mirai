@@ -17,8 +17,11 @@ euclid = "0.22"
 url = "2.5"
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "logging", "std", "tls12"] }
 log = "0.4"
-env_logger = "0.11"
 adblock = "0.13"
+egui = "0.34.3"
+egui-winit = "0.34.3"
+egui_glow = { version = "0.34.3", features = ["winit"] }
+glow = "0.17"
 
 # Servo is enormous; give debug builds enough optimization to be usable.
 [profile.dev]

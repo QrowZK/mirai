@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 240
+    env:
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      RUSTUP_WINDOWS_PATH_ADD_BIN: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MozTools (required to build SpiderMonkey)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/servo/servo-build-deps/releases/download/msvc-deps/moztools-4.0.zip" -OutFile moztools.zip
+          Expand-Archive moztools.zip -DestinationPath C:\moztools-build
+          "MOZTOOLS_PATH=C:\moztools-build\moztools-4.0" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-release
+          cache-all-crates: true
+
+      - name: Build release binary
+        run: cargo build -p mirai --release
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Ensure Inno Setup is installed
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          iscc /DAppVersion=${{ steps.version.outputs.version }} installer\mirai.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiraiSetup-${{ steps.version.outputs.version }}
+          path: installer/Output/MiraiSetup-*.exe
+
+      - name: Attach installer to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/MiraiSetup-*.exe
+          generate_release_notes: true
