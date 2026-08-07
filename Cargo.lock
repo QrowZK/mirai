@@ -3800,7 +3800,6 @@ name = "mirai"
 version = "0.1.0"
 dependencies = [
  "content-security-policy",
- "env_logger",
  "euclid",
  "log",
  "mirai-privacy",

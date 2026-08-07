@@ -12,8 +12,8 @@ use crate::app::{App, WakerEvent};
 const DEFAULT_URL: &str = "https://duckduckgo.com/";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
-
+    // Logging is installed by `servo.setup_logging()` once Servo starts; it
+    // honours RUST_LOG and would conflict with a logger installed here.
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Failed to install crypto provider");

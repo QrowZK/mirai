@@ -14,7 +14,6 @@ euclid = { workspace = true }
 url = { workspace = true }
 rustls = { workspace = true }
 log = { workspace = true }
-env_logger = { workspace = true }
 # Must match the version pinned by our Servo revision, since `Destination` in
 # WebResourceRequest comes from this crate.
 content-security-policy = "0.8.1"
