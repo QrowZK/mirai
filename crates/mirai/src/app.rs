@@ -15,6 +15,7 @@ use mirai_privacy::Blocker;
 use url::Url;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
+use winit::keyboard::ModifiersState;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
@@ -40,6 +41,7 @@ pub struct AppState {
     pub tabs: RefCell<Vec<WebView>>,
     pub active_tab: Cell<usize>,
     pub blocker: Blocker,
+    pub modifiers: Cell<ModifiersState>,
     pub blocking_enabled: AtomicBool,
     pub blocked_count: AtomicUsize,
     pub blocked_counts_per_tab: RefCell<HashMap<WebViewId, usize>>,
@@ -215,6 +217,7 @@ impl ApplicationHandler<WakerEvent> for App {
             tabs: Default::default(),
             active_tab: Cell::new(0),
             blocker,
+            modifiers: Cell::new(ModifiersState::empty()),
             blocking_enabled: AtomicBool::new(true),
             blocked_count: AtomicUsize::new(0),
             blocked_counts_per_tab: Default::default(),
@@ -268,6 +271,26 @@ impl ApplicationHandler<WakerEvent> for App {
                 gui.update(&state.window, state);
                 Self::process_commands(state);
                 gui.paint(&state.window);
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                state.modifiers.set(modifiers.state());
+            }
+            WindowEvent::KeyboardInput { event: key_event, .. } => {
+                // The chrome (egui) had first refusal; unconsumed keys go to
+                // the page in the active webview.
+                log::debug!(
+                    "keyboard event {:?} (egui consumed: {})",
+                    key_event.logical_key,
+                    response.consumed
+                );
+                if response.consumed {
+                    return;
+                }
+                if let Some(webview) = state.active_webview() {
+                    let keyboard_event =
+                        crate::keyutils::keyboard_event_from_winit(&key_event, state.modifiers.get());
+                    webview.notify_input_event(InputEvent::Keyboard(keyboard_event));
+                }
             }
             WindowEvent::CursorMoved { position, .. } if !response.consumed => {
                 let point = DevicePoint::new(position.x as f32, position.y as f32 - toolbar_offset);

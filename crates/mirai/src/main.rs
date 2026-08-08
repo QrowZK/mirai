@@ -4,6 +4,7 @@
 
 mod app;
 mod delegate;
+mod keyutils;
 mod ui;
 
 use std::error::Error;
