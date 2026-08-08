@@ -1,13 +1,15 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::time::Instant;
 
 use euclid::Scale;
 use libservo::{
     DevicePoint, EventLoopWaker, InputEvent, MouseButton, MouseButtonAction, MouseButtonEvent,
     MouseMoveEvent, OffscreenRenderingContext, RenderingContext, Servo, ServoBuilder, WebView,
-    WebViewBuilder, WheelDelta, WheelEvent, WheelMode, WindowRenderingContext,
+    WebViewBuilder, WebViewId, WheelDelta, WheelEvent, WheelMode, WindowRenderingContext,
 };
 use mirai_privacy::Blocker;
 use url::Url;
@@ -38,7 +40,9 @@ pub struct AppState {
     pub tabs: RefCell<Vec<WebView>>,
     pub active_tab: Cell<usize>,
     pub blocker: Blocker,
+    pub blocking_enabled: AtomicBool,
     pub blocked_count: AtomicUsize,
+    pub blocked_counts_per_tab: RefCell<HashMap<WebViewId, usize>>,
     commands: RefCell<Vec<Command>>,
 }
 
@@ -138,6 +142,10 @@ impl App {
             return;
         }
         let webview = tabs.remove(index);
+        state
+            .blocked_counts_per_tab
+            .borrow_mut()
+            .remove(&webview.id());
         drop(webview);
         let len = tabs.len();
         drop(tabs);
@@ -160,14 +168,27 @@ impl ApplicationHandler<WakerEvent> for App {
         };
 
         let start = Instant::now();
-        let blocker = Blocker::with_default_lists();
+        let blocker = match cache_dir() {
+            Some(cache_dir) => Blocker::with_default_lists_cached(&cache_dir),
+            None => Blocker::with_default_lists(),
+        };
         let blocker_load_time = start.elapsed();
 
         let display_handle = event_loop
             .display_handle()
             .expect("Failed to get display handle");
+        let icon = winit::window::Icon::from_rgba(
+            include_bytes!("../../../assets/icon-32.rgba").to_vec(),
+            32,
+            32,
+        )
+        .ok();
         let window = event_loop
-            .create_window(Window::default_attributes().with_title("Mirai"))
+            .create_window(
+                Window::default_attributes()
+                    .with_title("Mirai")
+                    .with_window_icon(icon),
+            )
             .expect("Failed to create winit Window");
         let window_handle = window.window_handle().expect("Failed to get window handle");
 
@@ -194,7 +215,9 @@ impl ApplicationHandler<WakerEvent> for App {
             tabs: Default::default(),
             active_tab: Cell::new(0),
             blocker,
+            blocking_enabled: AtomicBool::new(true),
             blocked_count: AtomicUsize::new(0),
+            blocked_counts_per_tab: Default::default(),
             commands: Default::default(),
         });
 
@@ -312,6 +335,17 @@ impl ApplicationHandler<WakerEvent> for App {
             _ => (),
         }
     }
+}
+
+/// The platform cache directory for Mirai (compiled filter-list cache, etc.).
+fn cache_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    #[cfg(not(target_os = "windows"))]
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")));
+    Some(base?.join("mirai"))
 }
 
 /// Interpret URL-bar input: a URL, a bare domain, or otherwise a search query.

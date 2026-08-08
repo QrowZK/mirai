@@ -13,6 +13,7 @@ AppPublisher=Mirai
 DefaultDirName={autopf}\Mirai
 DefaultGroupName=Mirai
 UninstallDisplayIcon={app}\mirai.exe
+SetupIconFile=..\assets\mirai.ico
 OutputBaseFilename=MiraiSetup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
@@ -24,6 +25,9 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 [Files]
 Source: "..\target\release\mirai.exe"; DestDir: "{app}"; Flags: ignoreversion
+; GStreamer runtime for video/audio playback, staged by stage-gstreamer.ps1.
+; libservo loads these from the exe's own directory on Windows.
+Source: "..\target\release\gst-dlls\*"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Mirai"; Filename: "{app}\mirai.exe"
