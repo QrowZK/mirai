@@ -15,16 +15,20 @@ use mirai_privacy::Blocker;
 use url::Url;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
-use winit::keyboard::ModifiersState;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::ModifiersState;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
+use crate::downloads::DownloadList;
+use crate::profile::Profile;
 use crate::ui::Gui;
 
 /// Actions requested by the chrome, applied between egui frames.
 pub enum Command {
     Go(String),
+    OpenInNewTab(String),
+    ToggleBookmarkForActiveTab,
     Back,
     Forward,
     Reload,
@@ -45,6 +49,9 @@ pub struct AppState {
     pub blocking_enabled: AtomicBool,
     pub blocked_count: AtomicUsize,
     pub blocked_counts_per_tab: RefCell<HashMap<WebViewId, usize>>,
+    pub profile: RefCell<Profile>,
+    pub downloads: DownloadList,
+    pub waker: Waker,
     commands: RefCell<Vec<Command>>,
 }
 
@@ -98,9 +105,28 @@ impl App {
         for command in commands {
             match command {
                 Command::Go(input) => {
-                    if let Some(url) = parse_location_input(&input) {
+                    let template = state.profile.borrow().settings.search_template.clone();
+                    if let Some(url) = parse_location_input(&input, &template) {
                         if let Some(webview) = state.active_webview() {
                             webview.load(url);
+                        }
+                    }
+                }
+                Command::OpenInNewTab(url_string) => {
+                    if let Ok(url) = Url::parse(&url_string) {
+                        let webview = state.new_tab(url);
+                        state.tabs.borrow_mut().push(webview);
+                        let last = state.tabs.borrow().len() - 1;
+                        state.activate(last);
+                    }
+                }
+                Command::ToggleBookmarkForActiveTab => {
+                    if let Some(webview) = state.active_webview() {
+                        if let Some(url) = webview.url() {
+                            let title = webview.page_title().unwrap_or_default();
+                            let mut profile = state.profile.borrow_mut();
+                            profile.toggle_bookmark(title, url.to_string());
+                            profile.save();
                         }
                     }
                 }
@@ -124,8 +150,12 @@ impl App {
                     }
                 }
                 Command::NewTab => {
-                    let webview = state
-                        .new_tab(Url::parse(crate::DEFAULT_URL).expect("default URL is valid"));
+                    let homepage = state.profile.borrow().settings.homepage.clone();
+                    let webview =
+                        state
+                            .new_tab(Url::parse(&homepage).unwrap_or_else(|_| {
+                                Url::parse(crate::DEFAULT_URL).expect("valid")
+                            }));
                     state.tabs.borrow_mut().push(webview);
                     let last = state.tabs.borrow().len() - 1;
                     state.activate(last);
@@ -168,6 +198,9 @@ impl ApplicationHandler<WakerEvent> for App {
         let Self::Initial(waker, url) = self else {
             return;
         };
+
+        let profile = Profile::load();
+        let blocking_on = profile.settings.blocking_enabled;
 
         let start = Instant::now();
         let blocker = match cache_dir() {
@@ -218,9 +251,12 @@ impl ApplicationHandler<WakerEvent> for App {
             active_tab: Cell::new(0),
             blocker,
             modifiers: Cell::new(ModifiersState::empty()),
-            blocking_enabled: AtomicBool::new(true),
+            blocking_enabled: AtomicBool::new(blocking_on),
             blocked_count: AtomicUsize::new(0),
             blocked_counts_per_tab: Default::default(),
+            profile: RefCell::new(profile),
+            downloads: Default::default(),
+            waker: waker.clone(),
             commands: Default::default(),
         });
 
@@ -275,7 +311,9 @@ impl ApplicationHandler<WakerEvent> for App {
             WindowEvent::ModifiersChanged(modifiers) => {
                 state.modifiers.set(modifiers.state());
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 // The chrome (egui) had first refusal; unconsumed keys go to
                 // the page in the active webview.
                 log::debug!(
@@ -287,8 +325,10 @@ impl ApplicationHandler<WakerEvent> for App {
                     return;
                 }
                 if let Some(webview) = state.active_webview() {
-                    let keyboard_event =
-                        crate::keyutils::keyboard_event_from_winit(&key_event, state.modifiers.get());
+                    let keyboard_event = crate::keyutils::keyboard_event_from_winit(
+                        &key_event,
+                        state.modifiers.get(),
+                    );
                     webview.notify_input_event(InputEvent::Keyboard(keyboard_event));
                 }
             }
@@ -372,7 +412,7 @@ fn cache_dir() -> Option<PathBuf> {
 }
 
 /// Interpret URL-bar input: a URL, a bare domain, or otherwise a search query.
-fn parse_location_input(input: &str) -> Option<Url> {
+fn parse_location_input(input: &str, search_template: &str) -> Option<Url> {
     let input = input.trim();
     if input.is_empty() {
         return None;
@@ -385,11 +425,8 @@ fn parse_location_input(input: &str) -> Option<Url> {
             return Some(url);
         }
     }
-    Url::parse(&format!(
-        "https://duckduckgo.com/?q={}",
-        url::form_urlencoded::byte_serialize(input.as_bytes()).collect::<String>()
-    ))
-    .ok()
+    let query: String = url::form_urlencoded::byte_serialize(input.as_bytes()).collect();
+    Url::parse(&search_template.replace("{}", &query)).ok()
 }
 
 fn winit_button_to_servo(button: winit::event::MouseButton) -> Option<MouseButton> {

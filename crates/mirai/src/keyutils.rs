@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use libservo::{Code, Key, KeyState, Location, Modifiers, NamedKey};
 use libservo::KeyboardEvent;
+use libservo::{Code, Key, KeyState, Location, Modifiers, NamedKey};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{
     Key as WinitKey, KeyCode, KeyLocation as WinitKeyLocation, ModifiersState,
@@ -34,7 +34,7 @@ impl FromWinitKeyEvent for Key {
             WinitKey::Character(ref string) => return Key::Character(string.to_string()),
             WinitKey::Unidentified(_) | WinitKey::Dead(_) => {
                 return Key::Named(NamedKey::Unidentified);
-            },
+            }
         };
 
         match named_key {
@@ -308,7 +308,7 @@ impl FromWinitKeyEvent for Key {
             WinitNamedKey::TVAudioDescription => Key::Named(NamedKey::TVAudioDescription),
             WinitNamedKey::TVAudioDescriptionMixDown => {
                 Key::Named(NamedKey::TVAudioDescriptionMixDown)
-            },
+            }
             WinitNamedKey::TVAudioDescriptionMixUp => Key::Named(NamedKey::TVAudioDescriptionMixUp),
             WinitNamedKey::TVContentsMenu => Key::Named(NamedKey::TVContentsMenu),
             WinitNamedKey::TVDataService => Key::Named(NamedKey::TVDataService),

@@ -4,7 +4,9 @@
 
 mod app;
 mod delegate;
+mod downloads;
 mod keyutils;
+mod profile;
 mod ui;
 
 use std::error::Error;
