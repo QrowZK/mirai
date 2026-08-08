@@ -1,4 +1,6 @@
 //! Mirai: an extremely lightweight, privacy-focused browser built on Servo.
+// A GUI app: don't open a console window on Windows.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod app;
 mod delegate;

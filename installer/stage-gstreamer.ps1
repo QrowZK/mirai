@@ -68,5 +68,20 @@ foreach ($plugin in ($plugins | ForEach-Object { "$_.dll" })) {
 if ($missing.Count -gt 0) {
     Write-Error "Missing GStreamer files: $($missing -join ', ')"
 }
+# ANGLE (libEGL/libGLESv2) is built by mozangle during the cargo build and
+# must ship next to the exe for the no-wgl rendering path.
+foreach ($dll in @("libEGL.dll", "libGLESv2.dll")) {
+    $found = Get-ChildItem -Path "target\release\build" -Recurse -Filter $dll -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($found) {
+        Copy-Item $found.FullName $OutDir
+    } else {
+        $missing += $dll
+    }
+}
+if ($missing.Count -gt 0) {
+    Write-Error "Missing runtime files: $($missing -join ', ')"
+}
+
 $count = (Get-ChildItem $OutDir).Count
-Write-Host "Staged $count GStreamer DLLs into $OutDir"
+Write-Host "Staged $count runtime DLLs into $OutDir"
