@@ -275,9 +275,17 @@ impl ApplicationHandler<WakerEvent> for App {
             WindowEvent::ModifiersChanged(modifiers) => {
                 state.modifiers.set(modifiers.state());
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } if !response.consumed => {
+            WindowEvent::KeyboardInput { event: key_event, .. } => {
                 // The chrome (egui) had first refusal; unconsumed keys go to
                 // the page in the active webview.
+                log::debug!(
+                    "keyboard event {:?} (egui consumed: {})",
+                    key_event.logical_key,
+                    response.consumed
+                );
+                if response.consumed {
+                    return;
+                }
                 if let Some(webview) = state.active_webview() {
                     let keyboard_event =
                         crate::keyutils::keyboard_event_from_winit(&key_event, state.modifiers.get());
