@@ -1,7 +1,10 @@
 use std::sync::atomic::Ordering;
 
 use content_security_policy::Destination;
-use libservo::{WebResourceLoad, WebResourceResponse, WebView, WebViewDelegate};
+use libservo::{
+    EventLoopWaker, NavigationRequest, WebResourceLoad, WebResourceResponse, WebView,
+    WebViewDelegate,
+};
 use mirai_privacy::RequestKind;
 
 use crate::app::AppState;
@@ -25,6 +28,24 @@ impl WebViewDelegate for AppState {
 
     fn notify_load_status_changed(&self, _webview: WebView, _status: libservo::LoadStatus) {
         self.window.request_redraw();
+    }
+
+    fn request_navigation(&self, _webview: WebView, request: NavigationRequest) {
+        // Servo has no embedder download support yet; navigations to file-type
+        // URLs are denied and fetched by the chrome instead.
+        if crate::downloads::is_download_url(&request.url) {
+            let url = request.url.clone();
+            request.deny();
+            crate::downloads::start_download(
+                url,
+                self.profile.borrow().downloads_dir(),
+                self.downloads.clone(),
+                self.waker.clone_box(),
+            );
+            self.window.request_redraw();
+            return;
+        }
+        request.allow();
     }
 
     fn load_web_resource(&self, webview: WebView, load: WebResourceLoad) {

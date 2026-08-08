@@ -22,6 +22,9 @@ egui = "0.34.3"
 egui-winit = "0.34.3"
 egui_glow = { version = "0.34.3", features = ["winit"] }
 glow = "0.17"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = "2.12"
 
 # Servo is enormous; give debug builds enough optimization to be usable.
 [profile.dev]

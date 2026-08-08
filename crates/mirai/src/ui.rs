@@ -172,6 +172,24 @@ impl Gui {
                                     *settings_open = !*settings_open;
                                 }
 
+                                let bookmarked = state
+                                    .active_webview()
+                                    .and_then(|webview| webview.url())
+                                    .map(|url| state.profile.borrow().is_bookmarked(url.as_str()))
+                                    .unwrap_or(false);
+                                let star = if bookmarked { "★" } else { "☆" };
+                                if ui
+                                    .add(toolbar_button(star))
+                                    .on_hover_text(if bookmarked {
+                                        "Remove bookmark"
+                                    } else {
+                                        "Bookmark this page"
+                                    })
+                                    .clicked()
+                                {
+                                    state.queue_command(Command::ToggleBookmarkForActiveTab);
+                                }
+
                                 let blocked_in_tab = state
                                     .active_webview()
                                     .and_then(|webview| {
@@ -258,26 +276,12 @@ impl Gui {
             if *settings_open {
                 egui::Window::new("Settings")
                     .collapsible(false)
-                    .resizable(false)
+                    .resizable(true)
+                    .default_width(360.0)
                     .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
                     .open(settings_open)
                     .show(ctx, |ui| {
-                        let mut blocking = state
-                            .blocking_enabled
-                            .load(std::sync::atomic::Ordering::Relaxed);
-                        if ui.checkbox(&mut blocking, "Block ads & trackers").changed() {
-                            state
-                                .blocking_enabled
-                                .store(blocking, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        ui.label(
-                            egui::RichText::new(
-                                "EasyList + EasyPrivacy, evaluated locally. \
-                                 Blocked requests never leave this machine.",
-                            )
-                            .small()
-                            .weak(),
-                        );
+                        settings_window_contents(ui, state);
                     });
             }
 
@@ -410,4 +414,138 @@ fn mirai_visuals() -> egui::Visuals {
     widgets.open.bg_stroke = Stroke::new(1.0, border_default);
 
     visuals
+}
+
+/// The contents of the settings window: general settings, privacy,
+/// bookmarks, and downloads.
+fn settings_window_contents(ui: &mut egui::Ui, state: &AppState) {
+    use std::sync::atomic::Ordering;
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.heading("General");
+        let mut profile_dirty = false;
+        {
+            let mut profile = state.profile.borrow_mut();
+            ui.horizontal(|ui| {
+                ui.label("Homepage");
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut profile.settings.homepage).desired_width(220.0),
+                );
+                if response.lost_focus() {
+                    profile_dirty = true;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Search URL");
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut profile.settings.search_template)
+                        .desired_width(220.0),
+                );
+                if response.lost_focus() {
+                    profile_dirty = true;
+                }
+                response.on_hover_text("{} is replaced with the search terms");
+            });
+        }
+
+        ui.separator();
+        ui.heading("Privacy");
+        let mut blocking = state.blocking_enabled.load(Ordering::Relaxed);
+        if ui.checkbox(&mut blocking, "Block ads & trackers").changed() {
+            state.blocking_enabled.store(blocking, Ordering::Relaxed);
+            state.profile.borrow_mut().settings.blocking_enabled = blocking;
+            profile_dirty = true;
+        }
+        let blocked_total = state.blocked_count.load(Ordering::Relaxed);
+        ui.label(
+            egui::RichText::new(format!(
+                "{blocked_total} requests blocked this session. EasyList + EasyPrivacy, \
+                 evaluated locally; blocked requests never leave this machine."
+            ))
+            .small()
+            .weak(),
+        );
+
+        ui.separator();
+        ui.heading("Bookmarks");
+        let bookmarks = state.profile.borrow().bookmarks.clone();
+        if bookmarks.is_empty() {
+            ui.label(
+                egui::RichText::new("No bookmarks yet — use the ☆ button in the toolbar.")
+                    .small()
+                    .weak(),
+            );
+        }
+        let mut remove_url = None;
+        for bookmark in &bookmarks {
+            ui.horizontal(|ui| {
+                if ui
+                    .link(truncate_with_ellipsis(&bookmark.title, 34))
+                    .on_hover_text(&bookmark.url)
+                    .clicked()
+                {
+                    state.queue_command(Command::OpenInNewTab(bookmark.url.clone()));
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                        remove_url = Some(bookmark.url.clone());
+                    }
+                });
+            });
+        }
+        if let Some(url) = remove_url {
+            let mut profile = state.profile.borrow_mut();
+            profile.bookmarks.retain(|bookmark| bookmark.url != url);
+            profile_dirty = true;
+        }
+
+        ui.separator();
+        ui.heading("Downloads");
+        let downloads = state.downloads.lock().unwrap().clone();
+        if downloads.is_empty() {
+            ui.label(
+                egui::RichText::new("Downloads will appear here.")
+                    .small()
+                    .weak(),
+            );
+        }
+        for entry in downloads.iter().rev() {
+            ui.horizontal(|ui| {
+                ui.label(truncate_with_ellipsis(&entry.file_name, 28))
+                    .on_hover_text(entry.path.display().to_string());
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| match &entry.status {
+                        crate::downloads::DownloadStatus::InProgress => match entry.total {
+                            Some(total) if total > 0 => {
+                                let fraction = entry.received as f32 / total as f32;
+                                ui.add(
+                                    egui::ProgressBar::new(fraction)
+                                        .desired_width(120.0)
+                                        .show_percentage(),
+                                );
+                            }
+                            _ => {
+                                ui.label(format!("{} KB…", entry.received / 1024));
+                            }
+                        },
+                        crate::downloads::DownloadStatus::Complete => {
+                            ui.label(egui::RichText::new("✔ done").color(PRIVACY_JADE));
+                        }
+                        crate::downloads::DownloadStatus::Failed(error) => {
+                            ui.label(
+                                egui::RichText::new("✕ failed")
+                                    .color(egui::Color32::from_rgb(0xA8, 0x44, 0x3A)),
+                            )
+                            .on_hover_text(error);
+                        }
+                    },
+                );
+            });
+        }
+
+        if profile_dirty {
+            state.profile.borrow().save();
+        }
+    });
 }
