@@ -30,6 +30,18 @@ impl WebViewDelegate for AppState {
         self.window.request_redraw();
     }
 
+    fn request_download(&self, _webview: WebView, url: url::Url, _suggested: Option<String>) {
+        // The engine hit content it cannot render (e.g. an unknown content
+        // type) and asks the chrome to download it instead.
+        crate::downloads::start_download(
+            url,
+            self.profile.borrow().downloads_dir(),
+            self.downloads.clone(),
+            self.waker.clone_box(),
+        );
+        self.window.request_redraw();
+    }
+
     fn request_navigation(&self, _webview: WebView, request: NavigationRequest) {
         // Servo has no embedder download support yet; navigations to file-type
         // URLs are denied and fetched by the chrome instead.
