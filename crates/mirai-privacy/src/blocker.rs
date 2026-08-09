@@ -176,6 +176,65 @@ mod tests {
         ));
     }
 
+    /// The blocker must never break first-party site functionality or
+    /// captcha/anti-bot widgets: users cannot log in to sites whose captcha we
+    /// block, and a blocked app bundle makes a site look broken rather than
+    /// private.
+    #[test]
+    fn allows_essential_site_resources() {
+        let blocker = blocker();
+        for (url, source, kind) in [
+            // GitHub application code and API.
+            (
+                "https://github.githubassets.com/assets/app-abc123.js",
+                "https://github.com/servo/servo/releases",
+                RequestKind::Script,
+            ),
+            (
+                "https://api.github.com/repos/servo/servo/releases",
+                "https://github.com/servo/servo/releases",
+                RequestKind::Xhr,
+            ),
+            // YouTube player code, thumbnails and video streams.
+            (
+                "https://www.youtube.com/s/desktop/abc/jsbin/desktop_polymer.vflset/desktop_polymer.js",
+                "https://www.youtube.com/watch?v=x",
+                RequestKind::Script,
+            ),
+            (
+                "https://i.ytimg.com/vi/abc/hqdefault.jpg",
+                "https://www.youtube.com/watch?v=x",
+                RequestKind::Image,
+            ),
+            (
+                "https://rr3---sn-abc.googlevideo.com/videoplayback?expire=123",
+                "https://www.youtube.com/watch?v=x",
+                RequestKind::Media,
+            ),
+            // Captcha and anti-bot widgets.
+            (
+                "https://www.google.com/recaptcha/api2/anchor?ar=1&k=abc",
+                "https://example.com/login",
+                RequestKind::SubDocument,
+            ),
+            (
+                "https://www.gstatic.com/recaptcha/releases/abc/recaptcha__en.js",
+                "https://example.com/login",
+                RequestKind::Script,
+            ),
+            (
+                "https://challenges.cloudflare.com/turnstile/v0/api.js",
+                "https://example.com/login",
+                RequestKind::Script,
+            ),
+        ] {
+            assert!(
+                !blocker.should_block(url, Some(source), kind),
+                "expected {url} to be allowed"
+            );
+        }
+    }
+
     #[test]
     fn cache_roundtrip() {
         let dir = std::env::temp_dir().join(format!("mirai-blocker-test-{}", std::process::id()));
